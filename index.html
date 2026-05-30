@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zoom Link CSV Processor</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0f0f13;
+  --surface:#17171e;
+  --surface2:#1e1e28;
+  --surface3:#25252f;
+  --border:rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.12);
+  --accent:#6c63ff;
+  --accent2:#8b84ff;
+  --accent-bg:rgba(108,99,255,0.12);
+  --accent-border:rgba(108,99,255,0.35);
+  --green:#22c55e;
+  --green-bg:rgba(34,197,94,0.1);
+  --amber:#f59e0b;
+  --amber-bg:rgba(245,158,11,0.1);
+  --red:#ef4444;
+  --red-bg:rgba(239,68,68,0.1);
+  --text:#f0eff8;
+  --text2:#9998b0;
+  --text3:#5c5b72;
+  --r:12px;
+  --r2:16px;
+  --r3:20px;
+}
+
+body{
+  font-family:'Plus Jakarta Sans',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  padding:48px 16px 80px;
+  overflow-x:hidden;
+}
+
+/* animated bg orbs */
+body::before,body::after{
+  content:'';
+  position:fixed;
+  border-radius:50%;
+  pointer-events:none;
+  z-index:0;
+}
+body::before{
+  width:600px;height:600px;
+  top:-200px;left:-150px;
+  background:radial-gradient(circle,rgba(108,99,255,0.12) 0%,transparent 70%);
+  animation:orbFloat 12s ease-in-out infinite;
+}
+body::after{
+  width:500px;height:500px;
+  bottom:-150px;right:-100px;
+  background:radial-gradient(circle,rgba(139,132,255,0.08) 0%,transparent 70%);
+  animation:orbFloat 15s ease-in-out infinite reverse;
+}
+
+@keyframes orbFloat{
+  0%,100%{transform:translate(0,0) scale(1)}
+  33%{transform:translate(30px,-40px) scale(1.05)}
+  66%{transform:translate(-20px,30px) scale(0.97)}
+}
+
+.app{
+  width:100%;max-width:580px;
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;gap:20px;
+}
+
+/* header */
+.header{
+  display:flex;align-items:center;gap:16px;
+  animation:fadeDown 0.5s cubic-bezier(0.16,1,0.3,1) both;
+}
+
+@keyframes fadeDown{
+  from{opacity:0;transform:translateY(-16px)}
+  to{opacity:1;transform:none}
+}
+
+.logo-ring{
+  width:52px;height:52px;flex-shrink:0;
+  border-radius:var(--r2);
+  background:var(--accent-bg);
+  border:1px solid var(--accent-border);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  animation:logoPulse 3s ease-in-out infinite;
+}
+
+@keyframes logoPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(108,99,255,0.25)}
+  50%{box-shadow:0 0 0 8px rgba(108,99,255,0)}
+}
+
+.logo-ring i{font-size:24px;color:var(--accent2)}
+
+.header-text h1{
+  font-size:20px;font-weight:700;
+  letter-spacing:-0.4px;
+  background:linear-gradient(135deg,#f0eff8 30%,#9998b0);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.header-text p{font-size:13px;color:var(--text2);margin-top:3px}
+
+/* cards */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r3);
+  padding:24px;
+  animation:fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) both;
+}
+.card:nth-child(2){animation-delay:.08s}
+.card:nth-child(3){animation-delay:.14s}
+.card:nth-child(4){animation-delay:.2s}
+
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(20px)}
+  to{opacity:1;transform:none}
+}
+
+/* drop zone */
+.drop-zone{
+  border:1.5px dashed var(--border2);
+  border-radius:var(--r2);
+  padding:48px 24px;
+  text-align:center;
+  cursor:pointer;
+  transition:border-color 0.2s,background 0.2s,transform 0.2s;
+  background:var(--surface2);
+  position:relative;overflow:hidden;
+}
+
+.drop-zone::after{
+  content:'';
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 0%,rgba(108,99,255,0.1),transparent 70%);
+  opacity:0;transition:opacity 0.3s;pointer-events:none;
+}
+
+.drop-zone:hover,.drop-zone.drag-over{
+  border-color:var(--accent);
+  background:var(--surface3);
+  transform:scale(1.005);
+}
+.drop-zone:hover::after,.drop-zone.drag-over::after{opacity:1}
+
+.drop-icon-wrap{
+  width:64px;height:64px;
+  border-radius:50%;
+  background:var(--accent-bg);
+  border:1px solid var(--accent-border);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 16px;
+  transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+.drop-zone:hover .drop-icon-wrap,.drop-zone.drag-over .drop-icon-wrap{
+  transform:translateY(-6px) scale(1.1);
+}
+.drop-icon-wrap i{font-size:26px;color:var(--accent2)}
+
+.drop-label{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
+.drop-sub{font-size:12px;color:var(--text2);line-height:1.6}
+.drop-sub span{
+  display:inline-block;margin-top:6px;
+  background:var(--accent-bg);color:var(--accent2);
+  border:1px solid var(--accent-border);
+  border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;
+}
+
+#fileInput{display:none}
+
+/* file list */
+.file-list{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+
+.file-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  animation:fileSlide 0.32s cubic-bezier(0.34,1.56,0.64,1) both;
+  transition:border-color 0.2s,background 0.2s;
+}
+.file-item:hover{border-color:var(--border2);background:var(--surface3)}
+
+@keyframes fileSlide{
+  from{opacity:0;transform:translateX(-14px) scale(0.97)}
+  to{opacity:1;transform:none}
+}
+
+.file-dot{
+  width:36px;height:36px;border-radius:9px;
+  background:var(--green-bg);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.file-dot i{font-size:18px;color:var(--green)}
+
+.file-info{flex:1;min-width:0}
+.file-name{font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-size{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:2px}
+
+.file-remove{
+  background:none;border:none;cursor:pointer;
+  color:var(--text3);font-size:18px;
+  padding:5px;border-radius:7px;
+  display:flex;align-items:center;
+  transition:color 0.15s,background 0.15s;
+  flex-shrink:0;
+}
+.file-remove:hover{color:var(--red);background:var(--red-bg)}
+
+/* process button */
+.process-btn{
+  width:100%;padding:15px;
+  background:var(--accent);
+  color:#fff;border:none;
+  border-radius:var(--r2);
+  font-family:'Plus Jakarta Sans',sans-serif;
+  font-size:14px;font-weight:700;
+  cursor:pointer;letter-spacing:0.2px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  position:relative;overflow:hidden;
+  transition:opacity 0.2s,transform 0.15s,background 0.2s;
+}
+.process-btn::before{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.15),transparent);
+  opacity:0;transition:opacity 0.2s;
+}
+.process-btn:hover:not(:disabled)::before{opacity:1}
+.process-btn:hover:not(:disabled){transform:translateY(-2px);background:#7c74ff}
+.process-btn:active:not(:disabled){transform:scale(0.99)}
+.process-btn:disabled{opacity:0.3;cursor:not-allowed}
+
+/* shimmer on btn */
+.process-btn .shimmer{
+  position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.15) 50%,transparent 100%);
+  transform:translateX(-100%);
+}
+.process-btn:not(:disabled):hover .shimmer{
+  animation:shimmerSlide 0.6s ease forwards;
+}
+@keyframes shimmerSlide{
+  to{transform:translateX(100%)}
+}
+
+/* progress */
+.progress-wrap{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r3);padding:24px;
+  display:none;animation:fadeUp 0.3s ease both;
+}
+.progress-wrap.visible{display:block}
+
+.progress-info{display:flex;justify-content:space-between;margin-bottom:10px}
+.progress-info span{font-size:12px;color:var(--text2)}
+.progress-info strong{font-size:12px;font-weight:600;color:var(--accent2);font-family:'JetBrains Mono',monospace}
+
+.progress-track{
+  height:6px;background:var(--surface3);
+  border-radius:999px;overflow:hidden;
+}
+.progress-fill{
+  height:100%;background:var(--accent);
+  border-radius:999px;width:0%;
+  transition:width 0.45s cubic-bezier(0.4,0,0.2,1);
+  position:relative;
+}
+.progress-fill::after{
+  content:'';
+  position:absolute;right:0;top:0;bottom:0;width:20px;
+  background:rgba(255,255,255,0.3);
+  border-radius:999px;
+  animation:progressGlow 1s ease-in-out infinite;
+}
+@keyframes progressGlow{
+  0%,100%{opacity:1}50%{opacity:0.3}
+}
+
+.progress-steps{
+  display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;
+}
+.step-pill{
+  font-size:11px;font-weight:500;
+  padding:3px 10px;border-radius:999px;
+  background:var(--surface2);color:var(--text3);
+  border:1px solid var(--border);
+  transition:all 0.3s ease;
+}
+.step-pill.active{background:var(--accent-bg);color:var(--accent2);border-color:var(--accent-border)}
+.step-pill.done{background:var(--green-bg);color:var(--green);border-color:rgba(34,197,94,0.3)}
+
+/* stats */
+.stats-grid{
+  display:none;grid-template-columns:repeat(3,1fr);gap:10px;
+}
+.stats-grid.visible{display:grid;animation:fadeUp 0.4s ease both}
+
+.stat{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--r);padding:14px;text-align:center;
+  animation:statPop 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.stat:nth-child(1){animation-delay:.05s}
+.stat:nth-child(2){animation-delay:.1s}
+.stat:nth-child(3){animation-delay:.15s}
+
+@keyframes statPop{
+  from{opacity:0;transform:scale(0.85)}
+  to{opacity:1;transform:none}
+}
+
+.stat-val{
+  font-size:24px;font-weight:700;
+  color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  letter-spacing:-1px;
+}
+.stat-lbl{font-size:10px;color:var(--text3);margin-top:3px;text-transform:uppercase;letter-spacing:0.6px}
+
+/* results */
+.results-wrap{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r3);padding:24px;
+  display:none;flex-direction:column;gap:12px;
+  animation:fadeUp 0.4s ease both;
+}
+.results-wrap.visible{display:flex}
+
+.results-header{
+  display:flex;align-items:center;gap:8px;
+  font-size:13px;font-weight:600;color:var(--green);
+  padding-bottom:12px;border-bottom:1px solid var(--border);
+}
+.results-header i{font-size:18px}
+
+.result-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--r);
+  animation:resultSlide 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+  transition:border-color 0.2s;
+}
+.result-item:hover{border-color:var(--accent-border)}
+
+@keyframes resultSlide{
+  from{opacity:0;transform:translateX(14px) scale(0.97)}
+  to{opacity:1;transform:none}
+}
+
+.result-dot{
+  width:36px;height:36px;border-radius:9px;
+  background:var(--accent-bg);border:1px solid var(--accent-border);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.result-dot i{font-size:18px;color:var(--accent2)}
+
+.result-info{flex:1;min-width:0}
+.result-name{font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.result-meta{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:2px}
+
+.badge-part{
+  display:inline-block;font-size:10px;font-weight:700;
+  background:var(--amber-bg);color:var(--amber);
+  border:1px solid rgba(245,158,11,0.3);
+  border-radius:5px;padding:1px 7px;margin-left:6px;vertical-align:middle;
+}
+
+.dl-btn{
+  padding:8px 14px;
+  background:var(--accent);color:#fff;
+  border:none;border-radius:8px;
+  font-family:'Plus Jakarta Sans',sans-serif;
+  font-size:12px;font-weight:600;
+  cursor:pointer;
+  display:flex;align-items:center;gap:5px;flex-shrink:0;
+  transition:opacity 0.15s,transform 0.15s;
+}
+.dl-btn:hover{opacity:0.85;transform:translateY(-1px)}
+.dl-btn:active{transform:scale(0.97)}
+
+/* dl-all btn */
+.dl-all-btn{
+  width:100%;padding:12px;
+  background:var(--green-bg);
+  color:var(--green);
+  border:1px solid rgba(34,197,94,0.3);
+  border-radius:var(--r);
+  font-family:'Plus Jakarta Sans',sans-serif;
+  font-size:13px;font-weight:600;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:opacity 0.15s,transform 0.15s;
+}
+.dl-all-btn:hover{opacity:0.8;transform:translateY(-1px)}
+
+.empty{text-align:center;padding:16px;font-size:13px;color:var(--text3)}
+
+/* tooltip notice */
+.notice{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:12px 14px;
+  background:var(--accent-bg);border:1px solid var(--accent-border);
+  border-radius:var(--r);font-size:12px;color:var(--text2);line-height:1.6;
+}
+.notice i{font-size:16px;color:var(--accent2);flex-shrink:0;margin-top:1px}
+
+/* scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:999px}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="header">
+    <div class="logo-ring"><i class="ti ti-table-import"></i></div>
+    <div class="header-text">
+      <h1>Zoom Link CSV Processor</h1>
+      <p>Combine files &amp; inject app download links</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload CSV files">
+      <div class="drop-icon-wrap"><i class="ti ti-cloud-upload"></i></div>
+      <p class="drop-label">Drop your CSV files here</p>
+      <p class="drop-sub">
+        Click to browse &nbsp;·&nbsp; Multiple files supported<br>
+        <span>All files combined → split at 2 MB</span>
+      </p>
+      <input type="file" id="fileInput" accept=".csv" multiple>
+    </div>
+
+    <div class="file-list" id="fileList"></div>
+
+    <button class="process-btn" id="processBtn" disabled style="margin-top:18px">
+      <span class="shimmer"></span>
+      <i class="ti ti-bolt"></i>
+      Process &amp; Combine All Files
+    </button>
+  </div>
+
+  <div class="notice">
+    <i class="ti ti-info-circle"></i>
+    <span>All uploaded CSV files are merged into a single dataset first, then split into &lt;2 MB chunks if needed. Output columns: <strong>Name, CountryCode, Phone, AllowBroadcast, AllowSMS, andlink, ioslink, winlink, maclink, brname</strong></span>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-info">
+      <span id="progressLabel">Initialising…</span>
+      <strong id="progressPct">0%</strong>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-steps">
+      <div class="step-pill" id="step1">Reading files</div>
+      <div class="step-pill" id="step2">Combining rows</div>
+      <div class="step-pill" id="step3">Injecting links</div>
+      <div class="step-pill" id="step4">Splitting chunks</div>
+      <div class="step-pill" id="step5">Done</div>
+    </div>
+  </div>
+
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat"><div class="stat-val" id="sRows">—</div><div class="stat-lbl">Total rows</div></div>
+    <div class="stat"><div class="stat-val" id="sFiles">—</div><div class="stat-lbl">Input files</div></div>
+    <div class="stat"><div class="stat-val" id="sChunks">—</div><div class="stat-lbl">Output files</div></div>
+  </div>
+
+  <div class="results-wrap" id="resultsWrap">
+    <div class="results-header"><i class="ti ti-circle-check"></i> Output files ready to download</div>
+  </div>
+
+</div>
+
+<script>
+const MAX_BYTES = 2 * 1024 * 1024;
+const ZOOM = {
+  andlink:'https://play.google.com/store/apps/details?id=us.zoom.videomeetings',
+  ioslink:'https://apps.apple.com/in/app/zoom-workplace/id546505307',
+  winlink:'https://zoom.us/download?os=win',
+  maclink:'https://zoom.us/download?os=mac'
+};
+const OUT_COLS = ['Name','CountryCode','Phone','AllowBroadcast','AllowSMS','andlink','ioslink','winlink','maclink','brname'];
+
+let files = [];
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+const processBtn = document.getElementById('processBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const progressPct = document.getElementById('progressPct');
+const statsGrid = document.getElementById('statsGrid');
+const resultsWrap = document.getElementById('resultsWrap');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' ') fileInput.click(); });
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); addFiles([...e.dataTransfer.files]); });
+fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value=''; });
+
+function addFiles(list) {
+  list.forEach(f => {
+    if(!f.name.toLowerCase().endsWith('.csv')) return;
+    if(files.find(u => u.name===f.name && u.size===f.size)) return;
+    files.push(f);
+  });
+  renderFiles();
+  processBtn.disabled = files.length === 0;
+}
+
+function fmt(b) {
+  if(b<1024) return b+' B';
+  if(b<1048576) return (b/1024).toFixed(1)+' KB';
+  return (b/1048576).toFixed(2)+' MB';
+}
+
+function renderFiles() {
+  fileListEl.innerHTML = '';
+  files.forEach((f,i) => {
+    const d = document.createElement('div');
+    d.className = 'file-item';
+    d.style.animationDelay = (i*0.05)+'s';
+    d.innerHTML = `
+      <div class="file-dot"><i class="ti ti-file-spreadsheet"></i></div>
+      <div class="file-info">
+        <div class="file-name">${f.name}</div>
+        <div class="file-size">${fmt(f.size)}</div>
+      </div>
+      <button class="file-remove" aria-label="Remove ${f.name}"><i class="ti ti-x"></i></button>`;
+    d.querySelector('.file-remove').addEventListener('click', () => {
+      files.splice(i,1); renderFiles(); processBtn.disabled = files.length===0;
+    });
+    fileListEl.appendChild(d);
+  });
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if(!lines.length) return [];
+  const headers = lines[0].split(',').map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const vals=[]; let cur='',inQ=false;
+    for(let i=0;i<line.length;i++){
+      const c=line[i];
+      if(c==='"'){inQ=!inQ;}
+      else if(c===','&&!inQ){vals.push(cur);cur='';}
+      else{cur+=c;}
+    }
+    vals.push(cur);
+    const obj={};
+    headers.forEach((h,idx)=>{ obj[h]=(vals[idx]||'').trim(); });
+    return obj;
+  }).filter(r => r['Phone']||r['CountryCode']);
+}
+
+function transform(row) {
+  return {
+    Name:row['Name']||'',
+    CountryCode:row['CountryCode']||'',
+    Phone:row['Phone']||'',
+    AllowBroadcast:row['AllowBroadcast']||'',
+    AllowSMS:row['AllowSMS']||'',
+    andlink:ZOOM.andlink,
+    ioslink:ZOOM.ioslink,
+    winlink:ZOOM.winlink,
+    maclink:ZOOM.maclink,
+    brname:row['brname']||''
+  };
+}
+
+function toLine(row) {
+  return OUT_COLS.map(c => {
+    const v=String(row[c]||'');
+    return (v.includes(',')||v.includes('"')||v.includes('\n'))?`"${v.replace(/"/g,'""')}"`:''+v;
+  }).join(',');
+}
+
+function splitChunks(rows) {
+  const hdr = OUT_COLS.join(',');
+  const enc = new TextEncoder();
+  const hBytes = enc.encode(hdr+'\n').length;
+  const chunks=[]; let cur=[],curB=hBytes;
+  rows.forEach(row => {
+    const line=toLine(row);
+    const lb=enc.encode(line+'\n').length;
+    if(curB+lb>MAX_BYTES && cur.length>0){chunks.push([...cur]);cur=[];curB=hBytes;}
+    cur.push(line); curB+=lb;
+  });
+  if(cur.length>0) chunks.push(cur);
+  return chunks.map((lines,i) => {
+    const content=hdr+'\n'+lines.join('\n');
+    const blob=new Blob([content],{type:'text/csv'});
+    const suffix=chunks.length>1?`_part${i+1}`:'';
+    return {blob, name:`zoom_links_combined${suffix}.csv`, rows:lines.length, size:blob.size};
+  });
+}
+
+function setStep(id) {
+  ['step1','step2','step3','step4','step5'].forEach((s,i) => {
+    const el=document.getElementById(s);
+    const target=document.getElementById(id);
+    const ids=['step1','step2','step3','step4','step5'];
+    const ti=ids.indexOf(id), si=ids.indexOf(s);
+    if(si<ti) el.className='step-pill done';
+    else if(si===ti) el.className='step-pill active';
+    else el.className='step-pill';
+  });
+}
+
+function setProgress(pct,label) {
+  progressFill.style.width=pct+'%';
+  progressPct.textContent=Math.round(pct)+'%';
+  progressLabel.textContent=label;
+}
+
+function download(chunk) {
+  const url=URL.createObjectURL(chunk.blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=chunk.name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+processBtn.addEventListener('click', async () => {
+  processBtn.disabled=true;
+  resultsWrap.innerHTML=`<div class="results-header"><i class="ti ti-circle-check"></i> Output files ready to download</div>`;
+  resultsWrap.classList.remove('visible');
+  statsGrid.classList.remove('visible');
+  progressWrap.classList.add('visible');
+  setProgress(0,'Reading files…'); setStep('step1');
+  await tick(60);
+
+  let allRows=[];
+
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    setProgress((i/files.length)*30, `Reading ${f.name}…`); setStep('step1');
+    await tick(40);
+    const text=await f.text();
+    const rows=parseCSV(text);
+    allRows.push(...rows);
+  }
+
+  setProgress(35,'Combining all rows…'); setStep('step2'); await tick(60);
+  setProgress(55,'Injecting Zoom links…'); setStep('step3'); await tick(60);
+
+  const transformed = allRows.map(transform);
+
+  setProgress(70,'Splitting into chunks…'); setStep('step4'); await tick(60);
+
+  const chunks=splitChunks(transformed);
+
+  setProgress(90,'Finalising…'); await tick(80);
+  setProgress(100,'Complete!'); setStep('step5'); await tick(300);
+
+  progressWrap.classList.remove('visible');
+  statsGrid.classList.add('visible');
+  resultsWrap.classList.add('visible');
+
+  document.getElementById('sRows').textContent=allRows.length.toLocaleString();
+  document.getElementById('sFiles').textContent=files.length;
+  document.getElementById('sChunks').textContent=chunks.length;
+
+  if(chunks.length===0){
+    resultsWrap.insertAdjacentHTML('beforeend','<p class="empty">No valid rows found.</p>');
+    processBtn.disabled=false; return;
+  }
+
+  chunks.forEach((chunk,i)=>{
+    const el=document.createElement('div');
+    el.className='result-item';
+    el.style.animationDelay=(i*0.08)+'s';
+    const badge=chunks.length>1?`<span class="badge-part">part ${i+1}/${chunks.length}</span>`:'';
+    el.innerHTML=`
+      <div class="result-dot"><i class="ti ti-file-download"></i></div>
+      <div class="result-info">
+        <div class="result-name">${chunk.name}${badge}</div>
+        <div class="result-meta">${chunk.rows.toLocaleString()} rows &nbsp;·&nbsp; ${fmt(chunk.size)}</div>
+      </div>
+      <button class="dl-btn"><i class="ti ti-download"></i> Download</button>`;
+    el.querySelector('.dl-btn').addEventListener('click',()=>download(chunk));
+    resultsWrap.appendChild(el);
+  });
+
+  if(chunks.length>1){
+    const allBtn=document.createElement('button');
+    allBtn.className='dl-all-btn';
+    allBtn.innerHTML=`<i class="ti ti-packages"></i> Download all ${chunks.length} files`;
+    allBtn.addEventListener('click',()=>{
+      chunks.forEach((c,i)=>setTimeout(()=>download(c),i*300));
+    });
+    resultsWrap.appendChild(allBtn);
+  }
+
+  processBtn.disabled=false;
+});
+
+function tick(ms){ return new Promise(r=>setTimeout(r,ms)); }
+</script>
+</body>
+</html>
