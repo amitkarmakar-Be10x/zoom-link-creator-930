@@ -47,31 +47,23 @@ body{
   overflow-x:hidden;
 }
 
-/* animated bg orbs */
-body::before,body::after{
-  content:'';
-  position:fixed;
-  border-radius:50%;
-  pointer-events:none;
-  z-index:0;
+/* funny bg canvas engine — bouncing googly blobs, 60fps */
+#funCanvas{
+  position:fixed;inset:0;
+  width:100%;height:100%;
+  z-index:0;pointer-events:none;
+  display:block;
 }
-body::before{
-  width:600px;height:600px;
-  top:-200px;left:-150px;
-  background:radial-gradient(circle,rgba(108,99,255,0.12) 0%,transparent 70%);
-  animation:orbFloat 12s ease-in-out infinite;
-}
-body::after{
-  width:500px;height:500px;
-  bottom:-150px;right:-100px;
-  background:radial-gradient(circle,rgba(139,132,255,0.08) 0%,transparent 70%);
-  animation:orbFloat 15s ease-in-out infinite reverse;
-}
-
-@keyframes orbFloat{
-  0%,100%{transform:translate(0,0) scale(1)}
-  33%{transform:translate(30px,-40px) scale(1.05)}
-  66%{transform:translate(-20px,30px) scale(0.97)}
+.fps-badge{
+  position:fixed;top:10px;right:12px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;font-weight:600;
+  color:var(--text3);
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:6px;padding:3px 8px;
+  z-index:2;opacity:0.75;
+  letter-spacing:0.5px;
 }
 
 .app{
@@ -431,6 +423,9 @@ body::after{
 </head>
 <body>
 
+<canvas id="funCanvas"></canvas>
+<div class="fps-badge" id="fpsBadge">60 fps</div>
+
 <div class="app">
 
   <div class="header">
@@ -724,6 +719,278 @@ processBtn.addEventListener('click', async () => {
 });
 
 function tick(ms){ return new Promise(r=>setTimeout(r,ms)); }
+</script>
+
+<script>
+/* ============================================================
+   Canvas Engine — parallax jelly blobs, constellation webbing,
+   click-confetti bursts. Fixed 60Hz simulation step, decoupled
+   from display refresh rate.
+   ============================================================ */
+(function(){
+  const canvas = document.getElementById('funCanvas');
+  const ctx = canvas.getContext('2d');
+  const fpsBadge = document.getElementById('fpsBadge');
+  let W=0,H=0,DPR=1;
+
+  const PALETTE = [
+    {fill:'rgba(108,99,255,0.16)', ring:'rgba(108,99,255,0.42)', iris:'#6c63ff'},
+    {fill:'rgba(139,132,255,0.14)', ring:'rgba(139,132,255,0.4)', iris:'#8b84ff'},
+    {fill:'rgba(34,197,94,0.13)',  ring:'rgba(34,197,94,0.36)',  iris:'#22c55e'},
+    {fill:'rgba(245,158,11,0.13)', ring:'rgba(245,158,11,0.36)', iris:'#f59e0b'},
+    {fill:'rgba(239,68,68,0.12)',  ring:'rgba(239,68,68,0.34)',  iris:'#ef4444'}
+  ];
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio||1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W*DPR); canvas.height = Math.round(H*DPR);
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const mouse = {x:W/2, y:H*0.3, active:false, down:false};
+  window.addEventListener('mousemove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; mouse.active=true; });
+  window.addEventListener('mouseleave', ()=>{ mouse.active=false; });
+  window.addEventListener('mousedown', e=>{ spawnBurst(e.clientX, e.clientY); });
+  window.addEventListener('touchstart', e=>{
+    const t=e.touches[0]; if(!t) return;
+    mouse.x=t.clientX; mouse.y=t.clientY; mouse.active=true;
+    spawnBurst(t.clientX, t.clientY);
+  }, {passive:true});
+
+  // ---------- Jelly blob characters (two depth layers = parallax) ----------
+  class Blob{
+    constructor(i, layer){
+      this.layer = layer; // 0 = background (soft, slow), 1 = foreground (crisp, faster)
+      const sizeBase = layer===0 ? [60,110] : [34,58];
+      this.r = sizeBase[0] + Math.random()*(sizeBase[1]-sizeBase[0]);
+      this.x = Math.random()*W;
+      this.y = Math.random()*H;
+      const speedBase = layer===0 ? [8,14] : [20,34];
+      const speed = speedBase[0] + Math.random()*(speedBase[1]-speedBase[0]);
+      const ang = Math.random()*Math.PI*2;
+      this.vx = Math.cos(ang)*speed;
+      this.vy = Math.sin(ang)*speed;
+      this.c = PALETTE[i % PALETTE.length];
+      this.wobblePhase = Math.random()*Math.PI*2;
+      this.wobbleSpeed = 1.0 + Math.random()*1.3;
+      this.squash = 0;
+      this.blinkT = 2 + Math.random()*4;
+      this.blinking = 0;
+      this.mouthPhase = Math.random()*10;
+      this.alpha = layer===0 ? 0.55 : 1;
+    }
+    step(dt){
+      this.x += this.vx*dt;
+      this.y += this.vy*dt;
+      if(this.x < this.r){ this.x=this.r; this.vx=Math.abs(this.vx); this.squash=1; }
+      if(this.x > W-this.r){ this.x=W-this.r; this.vx=-Math.abs(this.vx); this.squash=1; }
+      if(this.y < this.r){ this.y=this.r; this.vy=Math.abs(this.vy); this.squash=1; }
+      if(this.y > H-this.r){ this.y=H-this.r; this.vy=-Math.abs(this.vy); this.squash=1; }
+
+      if(mouse.active && this.layer===1){
+        const dx=mouse.x-this.x, dy=mouse.y-this.y;
+        const d=Math.hypot(dx,dy)||1;
+        if(d < 240){ this.vx += (dx/d)*7*dt; this.vy += (dy/d)*7*dt; }
+      }
+      const sp = Math.hypot(this.vx,this.vy);
+      const maxSp = this.layer===0 ? 26 : 76;
+      if(sp>maxSp){ this.vx=this.vx/sp*maxSp; this.vy=this.vy/sp*maxSp; }
+
+      this.squash *= 0.9;
+      this.wobblePhase += this.wobbleSpeed*dt;
+      this.blinkT -= dt;
+      if(this.blinkT <= 0){ this.blinking = 0.12; this.blinkT = 2.5 + Math.random()*4; }
+      if(this.blinking>0) this.blinking -= dt;
+      this.mouthPhase += dt;
+    }
+    draw(){
+      const wob = Math.sin(this.wobblePhase)*0.06;
+      const sx = 1 + wob + this.squash*0.18;
+      const sy = 1 - wob - this.squash*0.18;
+
+      ctx.save();
+      ctx.globalAlpha = this.alpha;
+      ctx.translate(this.x, this.y);
+      ctx.scale(sx, sy);
+      ctx.beginPath();
+      ctx.arc(0,0,this.r,0,Math.PI*2);
+      ctx.fillStyle = this.c.fill;
+      ctx.fill();
+      ctx.lineWidth = this.layer===0 ? 1.3 : 2;
+      ctx.strokeStyle = this.c.ring;
+      ctx.stroke();
+      ctx.restore();
+
+      if(this.layer===1) this.drawFace();
+      ctx.globalAlpha = 1;
+    }
+    drawFace(){
+      const eyeOffX = this.r*0.32, eyeOffY = -this.r*0.12;
+      const eyeR = this.r*0.22;
+      [-1,1].forEach(side=>{
+        const ex = this.x + side*eyeOffX, ey = this.y + eyeOffY;
+        const closed = this.blinking>0;
+        ctx.beginPath();
+        if(closed){
+          ctx.strokeStyle = '#1a1a22';
+          ctx.lineWidth = 2.5;
+          ctx.moveTo(ex-eyeR*0.6, ey);
+          ctx.lineTo(ex+eyeR*0.6, ey);
+          ctx.stroke();
+        } else {
+          ctx.arc(ex, ey, eyeR, 0, Math.PI*2);
+          ctx.fillStyle = '#f0eff8';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+          ctx.lineWidth=1; ctx.stroke();
+
+          let dx = mouse.x-ex, dy = mouse.y-ey;
+          const d = Math.hypot(dx,dy)||1;
+          const pull = Math.min(1, d/300);
+          const px = ex + (dx/d)*eyeR*0.42*pull;
+          const py = ey + (dy/d)*eyeR*0.42*pull;
+          ctx.beginPath();
+          ctx.arc(px,py,eyeR*0.46,0,Math.PI*2);
+          ctx.fillStyle = this.c.iris;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(px-eyeR*0.12,py-eyeR*0.12,eyeR*0.14,0,Math.PI*2);
+          ctx.fillStyle='rgba(255,255,255,0.85)';
+          ctx.fill();
+        }
+      });
+      const smileW = this.r*0.5;
+      const smileCurve = this.r*0.14 + Math.sin(this.mouthPhase*1.6)*this.r*0.03;
+      ctx.beginPath();
+      ctx.moveTo(this.x-smileW*0.5, this.y+this.r*0.32);
+      ctx.quadraticCurveTo(this.x, this.y+this.r*0.32+smileCurve, this.x+smileW*0.5, this.y+this.r*0.32);
+      ctx.strokeStyle = 'rgba(240,239,248,0.55)';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  }
+
+  const area = window.innerWidth*window.innerHeight;
+  const bgCount = Math.max(3, Math.min(5, Math.round(area/220000)));
+  const fgCount = Math.max(4, Math.min(8, Math.round(area/160000)));
+  const blobs = [];
+  for(let i=0;i<bgCount;i++) blobs.push(new Blob(i, 0));
+  for(let i=0;i<fgCount;i++) blobs.push(new Blob(i, 1));
+  const fgBlobs = blobs.filter(b=>b.layer===1);
+
+  // ---------- Confetti burst particles (click / tap) ----------
+  const confetti = [];
+  function spawnBurst(x,y){
+    const n = 14;
+    for(let i=0;i<n;i++){
+      const ang = (Math.PI*2*i)/n + Math.random()*0.4;
+      const speed = 60 + Math.random()*120;
+      confetti.push({
+        x, y,
+        vx: Math.cos(ang)*speed,
+        vy: Math.sin(ang)*speed - 40,
+        life: 0, maxLife: 0.7 + Math.random()*0.5,
+        size: 3 + Math.random()*4,
+        color: PALETTE[Math.floor(Math.random()*PALETTE.length)].iris,
+        rot: Math.random()*Math.PI*2,
+        vr: (Math.random()-0.5)*10
+      });
+    }
+    // nearest foreground blob gives a little startled squash
+    let nearest=null, nd=Infinity;
+    for(const b of fgBlobs){
+      const d = Math.hypot(b.x-x, b.y-y);
+      if(d<nd){ nd=d; nearest=b; }
+    }
+    if(nearest && nd < nearest.r*3) nearest.squash = 1;
+  }
+  function stepConfetti(dt){
+    const g = 220;
+    for(let i=confetti.length-1;i>=0;i--){
+      const p = confetti[i];
+      p.life += dt;
+      if(p.life >= p.maxLife){ confetti.splice(i,1); continue; }
+      p.vy += g*dt;
+      p.x += p.vx*dt;
+      p.y += p.vy*dt;
+      p.rot += p.vr*dt;
+    }
+  }
+  function drawConfetti(){
+    for(const p of confetti){
+      const t = 1 - p.life/p.maxLife;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0,t);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- Constellation webbing between nearby foreground blobs ----------
+  function drawWeb(){
+    const maxD = 220;
+    for(let i=0;i<fgBlobs.length;i++){
+      for(let j=i+1;j<fgBlobs.length;j++){
+        const a=fgBlobs[i], b=fgBlobs[j];
+        const d = Math.hypot(a.x-b.x, a.y-b.y);
+        if(d < maxD){
+          ctx.beginPath();
+          ctx.moveTo(a.x,a.y);
+          ctx.lineTo(b.x,b.y);
+          ctx.strokeStyle = `rgba(155,150,255,${0.14*(1-d/maxD)})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // ---------- Fixed-timestep simulation loop, locked to 60Hz ----------
+  const STEP = 1/60;
+  let acc = 0;
+  let last = performance.now();
+  let fpsCounter = 0, fpsTimer = 0;
+
+  function frame(now){
+    requestAnimationFrame(frame);
+    let delta = (now-last)/1000;
+    last = now;
+    if(delta > 0.25) delta = 0.25; // clamp tab-switch / stall gaps
+
+    acc += delta;
+    let steps = 0;
+    while(acc >= STEP && steps < 5){
+      for(const b of blobs) b.step(STEP);
+      stepConfetti(STEP);
+      acc -= STEP;
+      steps++;
+    }
+
+    ctx.clearRect(0,0,W,H);
+    for(const b of blobs) if(b.layer===0) b.draw();   // background layer first
+    drawWeb();
+    for(const b of blobs) if(b.layer===1) b.draw();   // foreground on top
+    drawConfetti();
+
+    fpsCounter++; fpsTimer += delta;
+    if(fpsTimer >= 0.5){
+      const fpsDisplay = Math.round(fpsCounter/fpsTimer);
+      fpsCounter = 0; fpsTimer = 0;
+      fpsBadge.textContent = fpsDisplay + ' fps';
+      fpsBadge.style.color = fpsDisplay >= 55 ? 'var(--green)' : (fpsDisplay>=40 ? 'var(--amber)' : 'var(--red)');
+    }
+  }
+  requestAnimationFrame(frame);
+})();
 </script>
 </body>
 </html>
